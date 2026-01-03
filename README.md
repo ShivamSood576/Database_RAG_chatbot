@@ -2,10 +2,7 @@
 
 A powerful AI-powered search interface that lets you query PostgreSQL databases using plain English. Built with Streamlit, LangChain, and Google Gemini.
 
-![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-12%2B-blue)
-![Streamlit](https://img.shields.io/badge/Streamlit-1.28%2B-red)
-![License](https://img.shields.io/badge/License-MIT-green)
+<img width="1907" height="853" alt="image" src="https://github.com/user-attachments/assets/69fd75b1-ca7d-4fc2-9861-cda6c8e62b22" />
 
 ## 🌟 Features
 
@@ -118,6 +115,8 @@ Try these natural language questions:
 **Complex Queries:**
 - "Show employees and their departments with average salary"
 - "Count orders per employee in Sales department"
+
+<img width="1910" height="825" alt="image" src="https://github.com/user-attachments/assets/a9418b91-0eb3-4102-a56c-aa5dcecd4673" />
 
 ## 🏗️ Project Structure
 
@@ -255,9 +254,9 @@ Built with ❤️ using LangChain, Google Gemini, and PostgreSQL
 
 ## 📞 Support
 
-- 📧 Email: your.email@example.com
-- 🐛 Issues: [GitHub Issues](https://github.com/yourusername/nl-database-search/issues)
-- 📖 Docs: [Wiki](https://github.com/yourusername/nl-database-search/wiki)
+- 📧 Email: soodshivam576@gmail.com
+
+
 
 ---
 
