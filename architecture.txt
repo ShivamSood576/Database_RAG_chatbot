@@ -1,0 +1,363 @@
+================================================================================
+NATURAL LANGUAGE DATABASE SEARCH - SYSTEM ARCHITECTURE
+================================================================================
+
+PROJECT OVERVIEW
+----------------
+An AI-powered natural language interface for querying PostgreSQL databases.
+Users can ask questions in plain English and receive SQL-powered results
+with semantic vector search.
+
+================================================================================
+1. SYSTEM COMPONENTS
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         USER INTERFACE LAYER                             │
+│                          (Streamlit Web App)                             │
+│                                                                          │
+│  ┌────────────────┐   ┌──────────────┐   ┌─────────────────┐          │
+│  │  Text Input    │───│ Search Button│───│ Results Display  │          │
+│  │   (Question)   │   │              │   │   (DataFrame)    │          │
+│  └────────────────┘   └──────────────┘   └─────────────────┘          │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      AI PROCESSING LAYER                                 │
+│                                                                          │
+│  ┌──────────────────────────────────────────────────────────────┐      │
+│  │             Google Gemini LLM (gemini-pro)                   │      │
+│  │        - Converts natural language to SQL                     │      │
+│  │        - Temperature: 0.1 (deterministic)                     │      │
+│  │        - Integrated via LangChain                             │      │
+│  └──────────────────────────────────────────────────────────────┘      │
+│                                                                          │
+│  ┌──────────────────────────────────────────────────────────────┐      │
+│  │          Google Gemini Embeddings (text-embedding-004)        │      │
+│  │        - Generates 768-dimensional vectors                    │      │
+│  │        - Used for semantic similarity search                  │      │
+│  └──────────────────────────────────────────────────────────────┘      │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                    ┌───────────────┴───────────────┐
+                    ▼                               ▼
+┌──────────────────────────────────┐  ┌───────────────────────────────┐
+│    SQL VALIDATION LAYER          │  │   VECTOR SEARCH LAYER         │
+│                                  │  │                               │
+│  ┌─────────────────────────┐    │  │  ┌─────────────────────────┐ │
+│  │  SQL Injection Check    │    │  │  │   FAISS Index           │ │
+│  │  - Block dangerous words│    │  │  │   - Employees           │ │
+│  │  - Only allow SELECT    │    │  │  │   - Departments         │ │
+│  │  - Remove comments      │    │  │  │   - Products            │ │
+│  └─────────────────────────┘    │  │  │   - Orders              │ │
+│                                  │  │  └─────────────────────────┘ │
+└──────────────────────────────────┘  └───────────────────────────────┘
+                    │                               │
+                    └───────────────┬───────────────┘
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      DATABASE LAYER                                      │
+│                                                                          │
+│  ┌──────────────────────────────────────────────────────────────┐      │
+│  │                    PostgreSQL Database                        │      │
+│  │                                                               │      │
+│  │   ┌─────────────┐   ┌──────────────┐   ┌──────────────┐   │      │
+│  │   │ departments │───│  employees   │───│    orders    │   │      │
+│  │   └─────────────┘   └──────────────┘   └──────────────┘   │      │
+│  │                           │                                 │      │
+│  │                           │                                 │      │
+│  │                     ┌──────────────┐                       │      │
+│  │                     │   products   │                       │      │
+│  │                     └──────────────┘                       │      │
+│  └──────────────────────────────────────────────────────────────┘      │
+└─────────────────────────────────────────────────────────────────────────┘
+
+================================================================================
+2. DATA FLOW
+================================================================================
+
+QUERY FLOW:
+-----------
+1. User enters natural language question
+   Example: "Show employees in Engineering"
+
+2. Question sent to Google Gemini LLM via LangChain
+   - Prompt includes database schema
+   - LLM generates SQL query
+
+3. SQL Validation
+   - Check for dangerous keywords (DROP, DELETE, etc.)
+   - Ensure only SELECT statements
+   - Remove SQL comments
+
+4. Execute SQL Query
+   - Connect to PostgreSQL
+   - Run validated query
+   - Fetch results as dictionary list
+
+5. Vector Similarity Search (Parallel)
+   - Generate query embedding using Gemini
+   - Search FAISS index for similar items
+   - Retrieve semantically related results
+
+6. Display Results
+   - Show SQL results in DataFrame
+   - Show vector search matches
+   - Provide CSV download option
+
+EMBEDDING CREATION FLOW:
+-------------------------
+1. Sample data inserted into PostgreSQL
+   - 5 departments
+   - 10 employees
+   - 10 products
+   - 20 orders
+
+2. For each text field:
+   - Send to Gemini embedding API
+   - Receive 768-dimensional vector
+   - Store in NumPy array
+
+3. Create FAISS Index:
+   - Build IndexFlatL2 (L2 distance)
+   - Add all vectors to index
+   - Save index to disk (faiss_indexes/)
+
+4. Save Metadata:
+   - Store IDs and text in pickle file
+   - Link vectors to database records
+
+================================================================================
+3. DATABASE SCHEMA
+================================================================================
+
+TABLE: departments
+------------------
+id              SERIAL PRIMARY KEY
+name            VARCHAR(100) UNIQUE
+
+TABLE: employees
+----------------
+id              SERIAL PRIMARY KEY
+name            VARCHAR(100)
+department_id   INT → departments.id
+email           VARCHAR(255) UNIQUE
+salary          DECIMAL(10,2)
+
+TABLE: products
+---------------
+id              SERIAL PRIMARY KEY
+name            VARCHAR(100)
+price           DECIMAL(10,2)
+
+TABLE: orders
+-------------
+id              SERIAL PRIMARY KEY
+customer_name   VARCHAR(100)
+employee_id     INT → employees.id
+order_total     DECIMAL(10,2)
+order_date      DATE
+
+RELATIONSHIPS:
+--------------
+employees.department_id → departments.id (Many-to-One)
+orders.employee_id → employees.id (Many-to-One)
+
+================================================================================
+4. SECURITY MEASURES
+================================================================================
+
+SQL INJECTION PREVENTION:
+-------------------------
+1. Keyword Blocking
+   - DROP, DELETE, INSERT, UPDATE, ALTER
+   - CREATE, TRUNCATE, EXEC, EXECUTE
+   
+2. Query Type Restriction
+   - Only SELECT statements allowed
+   - No data modification queries
+   
+3. Comment Removal
+   - Strip -- single line comments
+   - Strip /* */ multi-line comments
+   
+4. Query Validation
+   - Must start with SELECT (case-insensitive)
+   - Fail-fast on dangerous patterns
+
+ENVIRONMENT SECURITY:
+---------------------
+- API keys in .env file (not in code)
+- .env excluded from git (.gitignore)
+- Database credentials protected
+- No hardcoded secrets
+
+================================================================================
+5. VECTOR SEARCH IMPLEMENTATION
+================================================================================
+
+EMBEDDING MODEL:
+----------------
+- Model: Google Gemini text-embedding-004
+- Dimension: 768
+- Task: Semantic similarity search
+
+FAISS INDEX:
+------------
+- Type: IndexFlatL2 (exact search, L2 distance)
+- Storage: Disk-based persistence
+- Format: Binary index + pickle metadata
+
+SIMILARITY CALCULATION:
+-----------------------
+similarity = 1 / (1 + L2_distance)
+- Range: 0 to 1
+- Higher = more similar
+
+SEARCH PROCESS:
+---------------
+1. Convert query text to 768-dim vector
+2. Search FAISS index (k=5 nearest neighbors)
+3. Retrieve database records by IDs
+4. Add similarity scores
+5. Sort by similarity (descending)
+
+================================================================================
+6. FILE STRUCTURE
+================================================================================
+
+app.py (Main Application)
+--------------------------
+- Streamlit UI setup
+- LLM initialization (Gemini)
+- SQL generation chain
+- Query validation
+- Database connection
+- Vector search integration
+- Results display
+
+db_setup.py (Database Setup)
+-----------------------------
+- Create database if not exists
+- Create all tables
+- Define schema
+- Create indexes
+- No vector columns (FAISS used instead)
+
+insert_sample_data.py (Data Population)
+----------------------------------------
+- Connect to database
+- Insert sample data (departments, employees, products, orders)
+- Generate embeddings for text fields
+- Create FAISS indexes
+- Save indexes to disk
+
+.env (Environment Configuration)
+---------------------------------
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=vosco
+DB_USER=postgres
+DB_PASSWORD=***
+GOOGLE_API_KEY=***
+
+req.txt (Dependencies)
+----------------------
+langchain
+langchain-google-genai
+langchain-community
+streamlit
+psycopg2-binary
+faiss-cpu
+numpy
+pandas
+python-dotenv
+google-genai
+
+================================================================================
+7. TECHNOLOGY STACK
+================================================================================
+
+BACKEND:
+--------
+- Python 3.8+
+- PostgreSQL 12+
+- psycopg2 (PostgreSQL adapter)
+
+AI/ML:
+------
+- Google Gemini Pro (SQL generation)
+- Google Gemini Embeddings (vector generation)
+- LangChain (LLM framework)
+- FAISS (vector similarity search)
+- NumPy (numerical operations)
+
+FRONTEND:
+---------
+- Streamlit (web UI)
+- Pandas (data display)
+
+UTILITIES:
+----------
+- python-dotenv (environment management)
+- pickle (metadata serialization)
+
+================================================================================
+8. SCALABILITY CONSIDERATIONS
+================================================================================
+
+CURRENT DESIGN (Small-Medium Scale):
+-------------------------------------
+- FAISS IndexFlatL2 (exact search)
+- All indexes in memory
+- Single-server deployment
+- < 1M vectors
+
+SCALING OPTIONS:
+----------------
+1. Replace FAISS with Pinecone/Weaviate (cloud vector DB)
+2. Use FAISS IndexIVFFlat for larger datasets
+3. Implement query caching
+4. Add connection pooling
+5. Deploy on cloud (AWS, GCP, Azure)
+
+================================================================================
+9. FUTURE ENHANCEMENTS
+================================================================================
+
+POTENTIAL ADDITIONS:
+--------------------
+□ Multi-table JOIN optimization
+□ Query history with user accounts
+□ Advanced analytics and visualizations
+□ Voice input support
+□ Multiple database connections
+□ Custom embedding fine-tuning
+□ Real-time data updates
+□ API endpoints (REST/GraphQL)
+□ Query performance metrics
+□ Admin dashboard
+
+================================================================================
+10. DEPLOYMENT
+================================================================================
+
+LOCAL DEVELOPMENT:
+------------------
+1. python db_setup.py
+2. python insert_sample_data.py
+3. streamlit run app.py
+
+PRODUCTION:
+-----------
+1. Set up PostgreSQL on cloud (RDS, Cloud SQL)
+2. Deploy Streamlit on cloud platform
+3. Use managed vector DB (Pinecone)
+4. Implement authentication
+5. Add monitoring and logging
+6. Set up CI/CD pipeline
+
+================================================================================
+END OF ARCHITECTURE DOCUMENT
+================================================================================

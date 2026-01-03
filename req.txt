@@ -1,0 +1,13 @@
+langchain
+langchain_experimental
+langchain-google-genai
+langchain-community
+python-dotenv
+streamlit
+tiktoken
+protobuf
+psycopg2-binary
+faiss-cpu
+numpy
+pickle5
+google-genai
